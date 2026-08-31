@@ -38,7 +38,7 @@ export default function EditorTool() {
       setFileBuffer(buffer);
       
       try {
-        const pdfDoc = await loadPdfDocument(buffer);
+        const pdfDoc = await loadPdfDocument(buffer.slice(0));
         setNumPages(pdfDoc.numPages);
         setCurrentPage(1);
         setPagesFabricData({});
@@ -152,7 +152,7 @@ export default function EditorTool() {
     try {
       setIsExporting(true);
       const pagesDataArray = Array.from({ length: numPages }).map((_, i) => pagesFabricData[i] || null);
-      const modifiedBytes = await exportEditedPdf(fileBuffer, pagesDataArray);
+      const modifiedBytes = await exportEditedPdf(fileBuffer.slice(0), pagesDataArray);
       
       const blob = new Blob([modifiedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);

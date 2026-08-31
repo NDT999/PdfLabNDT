@@ -97,7 +97,7 @@ const PdfCanvas = forwardRef(({
     async function renderPdf() {
       try {
         setLoading(true);
-        const pdfDoc = await loadPdfDocument(fileBuffer);
+        const pdfDoc = await loadPdfDocument(fileBuffer.slice(0));
         const dataUrl = await renderPageToDataURL(pdfDoc, pageNumber, scale);
         if (isMounted) {
           setBgImage(dataUrl);
