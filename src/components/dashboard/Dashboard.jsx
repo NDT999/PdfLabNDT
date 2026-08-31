@@ -30,6 +30,13 @@ const TOOL_CATEGORIES = [
         path: '/organize',
         color: 'brand',
       },
+      {
+        name: 'Advanced Editor',
+        desc: 'Visually add text, images, shapes, and signatures.',
+        icon: '✏️',
+        path: '/editor',
+        color: 'brand',
+      },
     ],
   },
   {

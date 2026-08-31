@@ -16,6 +16,7 @@ const ImageToPdf = lazy(() => import('@/components/convert/ImageToPdf'));
 const PdfToImages = lazy(() => import('@/components/convert/PdfToImages'));
 const EncryptTool = lazy(() => import('@/components/security/EncryptTool'));
 const WatermarkTool = lazy(() => import('@/components/security/WatermarkTool'));
+const EditorTool = lazy(() => import('@/components/editor/EditorTool'));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center p-12">
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="split" element={<Suspense fallback={<LoadingFallback />}><SplitTool /></Suspense>} />
         <Route path="organize" element={<Suspense fallback={<LoadingFallback />}><OrganizeTool /></Suspense>} />
         <Route path="ocr" element={<Suspense fallback={<LoadingFallback />}><OcrTool /></Suspense>} />
+        <Route path="editor" element={<Suspense fallback={<LoadingFallback />}><EditorTool /></Suspense>} />
         <Route path="image-to-pdf" element={<Suspense fallback={<LoadingFallback />}><ImageToPdf /></Suspense>} />
         <Route path="pdf-to-images" element={<Suspense fallback={<LoadingFallback />}><PdfToImages /></Suspense>} />
         <Route path="encrypt" element={<Suspense fallback={<LoadingFallback />}><EncryptTool /></Suspense>} />
