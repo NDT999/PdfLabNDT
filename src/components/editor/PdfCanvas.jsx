@@ -16,7 +16,6 @@ const PdfCanvas = forwardRef(({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const fabricCanvasRef = useRef(null);
-  
   const [bgImage, setBgImage] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +30,9 @@ const PdfCanvas = forwardRef(({
         fill: '#0f172a',
         fontSize: 24 * scale,
         fontFamily: 'Helvetica',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        textAlign: 'left'
       });
       canvas.add(text);
       canvas.setActiveObject(text);
@@ -96,10 +98,7 @@ const PdfCanvas = forwardRef(({
       try {
         setLoading(true);
         const pdfDoc = await loadPdfDocument(fileBuffer);
-        
-        // Render at requested scale
         const dataUrl = await renderPageToDataURL(pdfDoc, pageNumber, scale);
-        
         if (isMounted) {
           setBgImage(dataUrl);
           setLoading(false);
@@ -126,16 +125,14 @@ const PdfCanvas = forwardRef(({
     }
 
     const canvas = new fabric.Canvas(canvasRef.current, {
-      isDrawingMode: activeTool === 'draw',
+      isDrawingMode: activeTool === 'draw' || activeTool === 'highlight',
     });
     
     fabricCanvasRef.current = canvas;
 
     fabric.Image.fromURL(bgImage, function(img) {
-      // Set canvas dimensions exactly to the rendered PDF image
       canvas.setWidth(img.width);
       canvas.setHeight(img.height);
-      
       canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
 
       if (initialFabricData) {
@@ -144,7 +141,6 @@ const PdfCanvas = forwardRef(({
         });
       }
 
-      // Notify parent of changes
       const handleChange = () => {
         if (onCanvasChange) onCanvasChange(canvas.toJSON());
       };
@@ -161,6 +157,9 @@ const PdfCanvas = forwardRef(({
               stroke: activeObj.stroke,
               strokeWidth: activeObj.strokeWidth,
               fontSize: activeObj.fontSize,
+              fontWeight: activeObj.fontWeight,
+              fontStyle: activeObj.fontStyle,
+              textAlign: activeObj.textAlign,
               opacity: activeObj.opacity
             });
           }
@@ -183,17 +182,61 @@ const PdfCanvas = forwardRef(({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bgImage]); 
+  
+  // Refresh canvas from initialFabricData when it changes and isn't the active save
+  // This is for Undo/Redo support to actually update the canvas visually
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !initialFabricData) return;
+    
+    // Only reload if the data actually differs from current canvas state
+    // We avoid deep compare, we just load and render.
+    // In a real app we'd compare JSONs to avoid redundant re-renders, but for undo/redo it's fine.
+    // The problem is loadFromJSON might trigger object:added, so we need to suppress onCanvasChange.
+    
+    // The parent uses a skip flag, so it's safe to load.
+    canvas.loadFromJSON(initialFabricData, function() {
+      canvas.renderAll();
+      // re-trigger selection update if needed
+      if (onSelectionChange) {
+        const activeObj = canvas.getActiveObject();
+        if (!activeObj) {
+          onSelectionChange(null);
+        } else {
+          onSelectionChange({
+            type: activeObj.type,
+            fill: activeObj.fill,
+            stroke: activeObj.stroke,
+            strokeWidth: activeObj.strokeWidth,
+            fontSize: activeObj.fontSize,
+            fontWeight: activeObj.fontWeight,
+            fontStyle: activeObj.fontStyle,
+            textAlign: activeObj.textAlign,
+            opacity: activeObj.opacity
+          });
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFabricData]);
 
   // 3. Handle active tool changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    canvas.isDrawingMode = activeTool === 'draw';
+    canvas.isDrawingMode = activeTool === 'draw' || activeTool === 'highlight';
     
-    if (activeTool === 'draw' && canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = drawColor;
-      canvas.freeDrawingBrush.width = drawWidth * scale;
+    if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
+      if (activeTool === 'highlight') {
+        const color = new fabric.Color('#fef08a');
+        color.setAlpha(0.5);
+        canvas.freeDrawingBrush.color = color.toRgba();
+        canvas.freeDrawingBrush.width = 20 * scale;
+      } else {
+        canvas.freeDrawingBrush.color = drawColor;
+        canvas.freeDrawingBrush.width = drawWidth * scale;
+      }
     }
   }, [activeTool, drawColor, drawWidth, scale]);
 
@@ -210,3 +253,4 @@ const PdfCanvas = forwardRef(({
 });
 
 export default PdfCanvas;
+
