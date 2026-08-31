@@ -96,10 +96,10 @@ export default function EditorTool() {
       {!fileBuffer ? (
         <div className="mx-auto max-w-2xl">
           <FileDropzone
-            onDrop={handleFileDrop}
-            accept={{ 'application/pdf': ['.pdf'] }}
-            maxFiles={1}
-            title="Drop a PDF here to edit"
+            onFiles={handleFileDrop}
+            accept="application/pdf"
+            multiple={false}
+            label="Drop a PDF here to edit"
           />
         </div>
       ) : (

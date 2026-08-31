@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
-import * as fabric from 'fabric';
+import { fabric } from 'fabric';
 import { loadPdfDocument, renderPageToDataURL } from '@/utils/pdfRenderer';
 
 const PdfCanvas = forwardRef(({ 
@@ -124,23 +124,23 @@ const PdfCanvas = forwardRef(({
     
     fabricCanvasRef.current = canvas;
 
-    const initCanvas = async () => {
-      try {
-        const img = await fabric.Image.fromURL(bgImage);
-        
+    try {
+      fabric.Image.fromURL(bgImage, function(img) {
         // Scale the background image to match the canvas dimensions exactly
         img.set({
           scaleX: canvasWidth / img.width,
-          scaleY: canvasHeight / img.height
+          scaleY: canvasHeight / img.height,
+          originX: 'left',
+          originY: 'top'
         });
         
-        canvas.backgroundImage = img;
-        canvas.renderAll();
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
 
         // Load initial data if any
         if (initialFabricData) {
-          await canvas.loadFromJSON(initialFabricData);
-          canvas.renderAll();
+          canvas.loadFromJSON(initialFabricData, function() {
+            canvas.renderAll();
+          });
         }
 
         // Event listeners to notify parent of changes
@@ -154,12 +154,10 @@ const PdfCanvas = forwardRef(({
         canvas.on('object:modified', handleChange);
         canvas.on('object:removed', handleChange);
         canvas.on('path:created', handleChange);
-      } catch (err) {
-        console.error('Error initializing fabric canvas:', err);
-      }
-    };
-
-    initCanvas();
+      });
+    } catch (err) {
+      console.error('Error initializing fabric canvas:', err);
+    }
 
     return () => {
       canvas.dispose();
