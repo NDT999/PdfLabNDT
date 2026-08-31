@@ -8,14 +8,16 @@ const PdfCanvas = forwardRef(({
   scale = 1.0, 
   initialFabricData, 
   onCanvasChange,
-  activeTool 
+  onSelectionChange,
+  activeTool,
+  drawColor = '#ef4444',
+  drawWidth = 3
 }, ref) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const fabricCanvasRef = useRef(null);
   
   const [bgImage, setBgImage] = useState(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [loading, setLoading] = useState(true);
 
   // Expose methods to parent
@@ -23,11 +25,12 @@ const PdfCanvas = forwardRef(({
     addText: () => {
       const canvas = fabricCanvasRef.current;
       if (!canvas) return;
-      const text = new fabric.IText('Double click to edit', {
+      const text = new fabric.IText('Text here', {
         left: 50,
         top: 50,
-        fill: '#ef4444', // red
-        fontSize: 24,
+        fill: '#0f172a',
+        fontSize: 24 * scale,
+        fontFamily: 'Helvetica',
       });
       canvas.add(text);
       canvas.setActiveObject(text);
@@ -42,14 +45,26 @@ const PdfCanvas = forwardRef(({
         top: 50,
         fill: 'transparent',
         stroke: '#ef4444',
-        strokeWidth: 2,
-        width: 100,
-        height: 100,
+        strokeWidth: 2 * scale,
+        width: 100 * scale,
+        height: 100 * scale,
       });
       canvas.add(rect);
       canvas.setActiveObject(rect);
       canvas.renderAll();
       if (onCanvasChange) onCanvasChange(canvas.toJSON());
+    },
+    addImage: (url) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+      fabric.Image.fromURL(url, (img) => {
+        img.scaleToWidth(150 * scale);
+        img.set({ left: 50, top: 50 });
+        canvas.add(img);
+        canvas.setActiveObject(img);
+        canvas.renderAll();
+        if (onCanvasChange) onCanvasChange(canvas.toJSON());
+      });
     },
     deleteSelected: () => {
       const canvas = fabricCanvasRef.current;
@@ -58,6 +73,16 @@ const PdfCanvas = forwardRef(({
       if (activeObjects.length) {
         canvas.discardActiveObject();
         activeObjects.forEach((obj) => canvas.remove(obj));
+        if (onCanvasChange) onCanvasChange(canvas.toJSON());
+      }
+    },
+    updateSelectedObject: (props) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+      const activeObj = canvas.getActiveObject();
+      if (activeObj) {
+        activeObj.set(props);
+        canvas.renderAll();
         if (onCanvasChange) onCanvasChange(canvas.toJSON());
       }
     }
@@ -71,15 +96,8 @@ const PdfCanvas = forwardRef(({
       try {
         setLoading(true);
         const pdfDoc = await loadPdfDocument(fileBuffer);
-        const page = await pdfDoc.getPage(pageNumber);
         
-        // Get natural dimensions
-        const viewport = page.getViewport({ scale: 1.0 });
-        if (isMounted) {
-          setDimensions({ width: viewport.width, height: viewport.height });
-        }
-
-        // Render at scale
+        // Render at requested scale
         const dataUrl = await renderPageToDataURL(pdfDoc, pageNumber, scale);
         
         if (isMounted) {
@@ -103,70 +121,70 @@ const PdfCanvas = forwardRef(({
   useEffect(() => {
     if (!canvasRef.current || !bgImage) return;
 
-    // Cleanup previous canvas
     if (fabricCanvasRef.current) {
       fabricCanvasRef.current.dispose();
     }
 
-    const canvasWidth = dimensions.width * scale;
-    const canvasHeight = dimensions.height * scale;
-
     const canvas = new fabric.Canvas(canvasRef.current, {
-      width: canvasWidth,
-      height: canvasHeight,
       isDrawingMode: activeTool === 'draw',
     });
     
-    if (activeTool === 'draw' && canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = '#ef4444';
-      canvas.freeDrawingBrush.width = 3;
-    }
-    
     fabricCanvasRef.current = canvas;
 
-    try {
-      fabric.Image.fromURL(bgImage, function(img) {
-        // Scale the background image to match the canvas dimensions exactly
-        img.set({
-          scaleX: canvasWidth / img.width,
-          scaleY: canvasHeight / img.height,
-          originX: 'left',
-          originY: 'top'
+    fabric.Image.fromURL(bgImage, function(img) {
+      // Set canvas dimensions exactly to the rendered PDF image
+      canvas.setWidth(img.width);
+      canvas.setHeight(img.height);
+      
+      canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+
+      if (initialFabricData) {
+        canvas.loadFromJSON(initialFabricData, function() {
+          canvas.renderAll();
         });
-        
-        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+      }
 
-        // Load initial data if any
-        if (initialFabricData) {
-          canvas.loadFromJSON(initialFabricData, function() {
-            canvas.renderAll();
-          });
-        }
+      // Notify parent of changes
+      const handleChange = () => {
+        if (onCanvasChange) onCanvasChange(canvas.toJSON());
+      };
 
-        // Event listeners to notify parent of changes
-        const handleChange = () => {
-          if (onCanvasChange) {
-            onCanvasChange(canvas.toJSON());
+      const handleSelection = () => {
+        if (onSelectionChange) {
+          const activeObj = canvas.getActiveObject();
+          if (!activeObj) {
+            onSelectionChange(null);
+          } else {
+            onSelectionChange({
+              type: activeObj.type,
+              fill: activeObj.fill,
+              stroke: activeObj.stroke,
+              strokeWidth: activeObj.strokeWidth,
+              fontSize: activeObj.fontSize,
+              opacity: activeObj.opacity
+            });
           }
-        };
+        }
+      };
 
-        canvas.on('object:added', handleChange);
-        canvas.on('object:modified', handleChange);
-        canvas.on('object:removed', handleChange);
-        canvas.on('path:created', handleChange);
-      });
-    } catch (err) {
-      console.error('Error initializing fabric canvas:', err);
-    }
+      canvas.on('object:added', handleChange);
+      canvas.on('object:modified', handleChange);
+      canvas.on('object:removed', handleChange);
+      canvas.on('path:created', handleChange);
+
+      canvas.on('selection:created', handleSelection);
+      canvas.on('selection:updated', handleSelection);
+      canvas.on('selection:cleared', handleSelection);
+    });
 
     return () => {
       canvas.dispose();
       fabricCanvasRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bgImage, dimensions, scale]); 
+  }, [bgImage]); 
 
-  // 3. Handle active tool changes without re-initializing
+  // 3. Handle active tool changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -174,19 +192,19 @@ const PdfCanvas = forwardRef(({
     canvas.isDrawingMode = activeTool === 'draw';
     
     if (activeTool === 'draw' && canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = '#ef4444';
-      canvas.freeDrawingBrush.width = 3;
+      canvas.freeDrawingBrush.color = drawColor;
+      canvas.freeDrawingBrush.width = drawWidth * scale;
     }
-  }, [activeTool]);
+  }, [activeTool, drawColor, drawWidth, scale]);
 
   return (
-    <div ref={containerRef} className="relative inline-block border border-slate-700 shadow-md bg-white">
+    <div ref={containerRef} className="relative inline-block bg-white shadow-2xl transition-all">
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10 backdrop-blur-sm">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500"></div>
         </div>
       )}
-      <canvas ref={canvasRef} />
+      <canvas ref={canvasRef} className="border border-slate-300" />
     </div>
   );
 });
