@@ -22,6 +22,10 @@ export async function renderPageToDataURL(pdfDoc, pageNumber, scale = 0.5) {
   canvas.height = viewport.height;
   canvas.width = viewport.width;
   
+  // Fill white background (PDFs often have transparent backgrounds which turn black in JPEG)
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  
   const renderContext = {
     canvasContext: context,
     viewport: viewport
